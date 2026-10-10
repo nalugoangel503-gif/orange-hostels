@@ -106,7 +106,11 @@ elif menu == "📝 Register Student Account":
 # -------------------------------------------------------------
 elif menu == "🛌 Make Room Reservation":
   st.header("Room Booking Portal")
+  st.write("Book your room by providing your registered student number.")
+
   reg_no = st.text_input("Enter Your Student Reg Number")
+
+  # Fetch available rooms
   cursor.execute(
       "SELECT room_id, room_number, price FROM room WHERE status ="
       " 'Available'"
@@ -115,35 +119,40 @@ elif menu == "🛌 Make Room Reservation":
   room_options = {
       f"Room {r[1]} (UGX {r[2]:,.0f})": r[0] for r in available_rooms
   }
+
   if room_options:
     selected_room_label = st.selectbox(
         "Select Available Room", list(room_options.keys())
     )
     selected_room_id = room_options[selected_room_label]
-    if st.button("Confirm Reservation"):
-      cursor.execute(
-          "SELECT reg_number FROM student WHERE reg_number = ?", (reg_no,)
-      )
-      if cursor.fetchone():
-        booking_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if st.button("Confirm Reservation Now"):
+      if reg_no:
         cursor.execute(
-            "INSERT INTO booking (reg_number, room_id, booking_date,"
-            " status) VALUES (?, ?, ?, 'Pending')",
-            (reg_no, selected_room_id, booking_date),
+            "SELECT reg_number FROM student WHERE reg_number = ?", (reg_no,)
         )
-        conn.commit()
-        new_b_id = cursor.lastrowid
-        st.success(
-            f"✅ Booking Created! Your Booking ID is #{new_b_id}. Use this to"
-            " pay."
-        )
+        if cursor.fetchone():
+          booking_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+          cursor.execute(
+              "INSERT INTO booking (reg_number, room_id, booking_date,"
+              " status) VALUES (?, ?, ?, 'Pending')",
+              (reg_no, selected_room_id, booking_date),
+          )
+          conn.commit()
+          new_b_id = cursor.lastrowid
+          st.success(
+              f"✅ Booking Created Successfully! Your Booking ID is"
+              f" **#{new_b_id}**. Copy this ID to make your payment."
+          )
+        else:
+          st.error(
+              "❌ Error: This Registration Number is not registered yet."
+              " Please register first under '📝 Register Student Account'."
+          )
       else:
-        st.error(
-            "❌ Error: Student Registration Number not found in the" " system."
-        )
+        st.warning("Please enter your student registration number first.")
   else:
     st.info("No rooms are currently available for booking.")
-
 # -------------------------------------------------------------
 # 4. PROCESS PAYMENT (FIXED DATABASE ERRORS)
 # -------------------------------------------------------------
