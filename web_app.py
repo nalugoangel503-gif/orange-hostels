@@ -1,294 +1,279 @@
+from datetime import datetime
 import hashlib
 import sqlite3
-from datetime import datetime
+import models
+import streamlit as st
 
+# Initialize the database and default rooms on app load
+models.init_db()
 
-# ==========================================
-# DATABASE INITIALIZATION
-# ==========================================
-def init_db():
-    conn = sqlite3.connect("orange_hostels.db")
-    cursor = conn.cursor()
+# Page configuration
+st.set_page_config(
+    page_title="Orange Hostels Management System", page_icon="🍊", layout="wide"
+)
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user (
-        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
-        phone TEXT NOT NULL,
-        password_hash TEXT NOT NULL
+st.title("🍊 Orange Hostels Management System")
+st.markdown(
+    "### Kampala University Luweero Campus | Student Portal & Management"
+    " Dashboard"
+)
+st.info(
+    "📍 **Hostel Location Background:** Luweero District | Katikamu Town Council"
+    " | Butanza Sub-county | Nakyewa Village"
+)
+
+# Sidebar Navigation
+menu = st.sidebar.selectbox(
+    "Navigation Menu",
+    [
+        "🏠 Browse Rooms Inventory",
+        "📝 Register Student Account",
+        "🛌 Make Room Reservation",
+        "💳 Process Payment",
+        "🚨 Emergency SOS Desk",
+        "📊 Manager Control Dashboard",
+    ],
+)
+
+# Connect to database for queries
+conn = sqlite3.connect("orange_hostels.db")
+cursor = conn.cursor()
+
+# -------------------------------------------------------------
+# 1. BROWSE ROOMS
+# -------------------------------------------------------------
+if menu == "🏠 Browse Rooms Inventory":
+    st.header("Hostel Rooms Inventory")
+    st.write("Browse available rooms across our blocks and check their rates.")
+
+    cursor.execute(
+        "SELECT room_id, room_number, capacity, price, status FROM room"
     )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS student (
-        reg_number TEXT PRIMARY KEY,
-        user_id INTEGER UNIQUE,
-        year_of_study INTEGER NOT NULL,
-        national_id TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS manager (
-        manager_id TEXT PRIMARY KEY,
-        user_id INTEGER UNIQUE,
-        department TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS room (
-        room_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        room_number TEXT UNIQUE NOT NULL,
-        capacity INTEGER NOT NULL,
-        price REAL NOT NULL,
-        status TEXT DEFAULT 'Available'
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS booking (
-        booking_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        reg_number TEXT NOT NULL,
-        room_id INTEGER NOT NULL,
-        booking_date TEXT NOT NULL,
-        status TEXT DEFAULT 'Pending',
-        FOREIGN KEY (reg_number) REFERENCES student(reg_number),
-        FOREIGN KEY (room_id) REFERENCES room(room_id)
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS payment (
-        payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        booking_id INTEGER UNIQUE NOT NULL,
-        amount REAL NOT NULL,
-        transaction_ref TEXT UNIQUE NOT NULL,
-        payment_method TEXT NOT NULL,
-        FOREIGN KEY (booking_id) REFERENCES booking(booking_id)
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS emergency (
-        alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        reg_number TEXT NOT NULL,
-        room_number TEXT NOT NULL,
-        emergency_type TEXT NOT NULL,
-        description TEXT NOT NULL,
-        status TEXT DEFAULT 'Active (Unresolved)',
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (reg_number) REFERENCES student(reg_number)
-    )
-    """)
-
-    # Default Room Data
-    cursor.execute("SELECT COUNT(*) FROM room")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany(
-            """
-        INSERT INTO room (room_number, capacity, price, status)
-        VALUES (?, ?, ?, 'Available')
-        """,
-            [
-                ("Block A - 101", 2, 500000.0),
-                ("Block A - 102", 1, 800000.0),
-                ("Block B - 201", 4, 350000.0),
-            ],
-        )
-
-    conn.commit()
-    conn.close()
-
-
-init_db()
-
-
-# ==========================================
-# OOP CLASSES
-# ==========================================
-class User:
-
-    def __init__(self, full_name, phone, password):
-        self.full_name = full_name
-        self.phone = phone
-        self.password_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
-class Student(User):
-
-    @staticmethod
-    def register(full_name, phone, password, reg_number, year_of_study, national_id):
-        conn = sqlite3.connect("orange_hostels.db")
-        cursor = conn.cursor()
-        try:
-            hashed_pwd = hashlib.sha256(password.encode("utf-8")).hexdigest()
-            cursor.execute(
-                "INSERT INTO user (full_name, phone, password_hash) VALUES"
-                " (?, ?, ?)",
-                (full_name, phone, hashed_pwd),
-            )
-            u_id = cursor.lastrowid
-            cursor.execute(
-                "INSERT INTO student (reg_number, user_id, year_of_study,"
-                " national_id) VALUES (?, ?, ?, ?)",
-                (reg_number, u_id, year_of_study, national_id),
-            )
-            conn.commit()
-            print(f"✅ Student '{full_name}' Registered Successfully!")
-        except sqlite3.IntegrityError:
-            print(f"❌ Error: Reg Number '{reg_number}' already exists.")
-        finally:
-            conn.close()
-
-
-class Manager(User):
-
-    @staticmethod
-    def register_manager(full_name, phone, password, manager_id, department):
-        conn = sqlite3.connect("orange_hostels.db")
-        cursor = conn.cursor()
-        try:
-            hashed_pwd = hashlib.sha256(password.encode("utf-8")).hexdigest()
-            cursor.execute(
-                "INSERT INTO user (full_name, phone, password_hash) VALUES"
-                " (?, ?, ?)",
-                (full_name, phone, hashed_pwd),
-            )
-            u_id = cursor.lastrowid
-            cursor.execute(
-                "INSERT INTO manager (manager_id, user_id, department) VALUES"
-                " (?, ?, ?)",
-                (manager_id, u_id, department),
-            )
-            conn.commit()
-            print(f"✅ Manager '{full_name}' Registered Successfully!")
-        except sqlite3.IntegrityError:
-            print(f"❌ Error: Manager ID '{manager_id}' already exists.")
-        finally:
-            conn.close()
-
-
-# ==========================================
-# SYSTEM FUNCTIONS
-# ==========================================
-def view_rooms():
-    conn = sqlite3.connect("orange_hostels.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT room_id, room_number, capacity, price, status FROM room")
     rooms = cursor.fetchall()
-    conn.close()
 
-    print("\n--- HOSTEL ROOMS INVENTORY ---")
-    print(f"{'ID':<5} {'Room Number':<20} {'Capacity':<10} {'Price (UGX)':<15} {'Status':<10}")
-    print("-" * 65)
     for r in rooms:
-        print(f"{r[0]:<5} {r[1]:<20} {r[2]:<10} {r[3]:<15,.0f} {r[4]:<10}")
-
-
-def book_room():
-    reg_no = input("\nEnter Student Reg Number (e.g., 2026/OCT/001): ").strip()
-    view_rooms()
-    room_id = input("Enter Room ID to Book: ").strip()
-
-    conn = sqlite3.connect("orange_hostels.db")
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT reg_number FROM student WHERE reg_number = ?", (reg_no,))
-    if not cursor.fetchone():
-        print("❌ Error: Student Registration Number not found!")
-        conn.close()
-        return
-
-    booking_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute(
-        "INSERT INTO booking (reg_number, room_id, booking_date, status) VALUES (?, ?, ?, 'Pending')",
-        (reg_no, room_id, booking_date),
-    )
-    b_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    print(f"✅ Booking #{b_id} Created! Status: Pending Payment.")
-
-
-def process_payment():
-    b_id = input("\nEnter Booking ID to Pay For: ").strip()
-    amount = float(input("Enter Amount (UGX): ").strip())
-    txn_ref = input("Enter Mobile Money / Bank Ref Code: ").strip()
-    method = input("Enter Method (MTN MoMo / Airtel Money / Bank): ").strip()
-
-    conn = sqlite3.connect("orange_hostels.db")
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(
-            "INSERT INTO payment (booking_id, amount, transaction_ref, payment_method) VALUES (?, ?, ?, ?)",
-            (b_id, amount, txn_ref, method),
+        status_color = "green" if r[4] == "Available" else "orange"
+        st.markdown(
+            f"""
+            * **Room Number:** {r[1]} 
+            * **Capacity:** {r[2]} Student(s) 
+            * **Price:** UGX {r[3]:,.0f} per semester 
+            * **Status:** :{status_color}[**{r[4]}**]
+            """
         )
-        cursor.execute("UPDATE booking SET status = 'Confirmed' WHERE booking_id = ?", (b_id,))
+        st.divider()
 
-        cursor.execute("SELECT room_id FROM booking WHERE booking_id = ?", (b_id,))
-        res = cursor.fetchone()
-        if res:
-            cursor.execute("UPDATE room SET status = 'Booked' WHERE room_id = ?", (res[0],))
-
-        conn.commit()
-        print(f"✅ Payment Verified! Booking #{b_id} CONFIRMED.")
-    except sqlite3.IntegrityError:
-        print("❌ Error: Payment reference or Booking ID already processed.")
-    finally:
-        conn.close()
-
-
-def send_emergency_sos():
-    print("\n🚨 --- EMERGENCY SOS PANIC DESK ---")
-    reg_no = input("Enter Your Reg Number: ").strip()
-    room_no = input("Enter Current Room / Location: ").strip()
-    e_type = input("Emergency Category (Medical / Security / Fire): ").strip()
-    desc = input("Describe Emergency Need: ").strip()
-
-    conn = sqlite3.connect("orange_hostels.db")
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT reg_number FROM student WHERE reg_number = ?", (reg_no,))
-    if not cursor.fetchone():
-        print("❌ Student Registration Number not found!")
-        conn.close()
-        return
-
-    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute(
-        "INSERT INTO emergency (reg_number, room_number, emergency_type, description, created_at) VALUES (?, ?, ?, ?, ?)",
-        (reg_no, room_no, e_type, desc, created_at),
+# -------------------------------------------------------------
+# 2. REGISTER STUDENT ACCOUNT
+# -------------------------------------------------------------
+elif menu == "📝 Register Student Account":
+    st.header("Student Account Registration")
+    st.write(
+        "Fill in your details below to create your student account in the"
+        " system."
     )
-    conn.commit()
-    conn.close()
 
-    print("🚨 EMERGENCY ALERT BROADCASTED! Hostel wardens & managers notified.")
+    with st.form("student_reg_form"):
+        full_name = st.text_input("Full Name")
+        phone = st.text_input("Phone Number")
+        password = st.text_input("Password", type="password")
+        reg_number = st.text_input("Registration Number (e.g., 2026/OCT/001)")
+        year_of_study = st.number_input(
+            "Year of Study", min_value=1, max_value=4, value=1
+        )
+        national_id = st.text_input("National ID / NIN")
 
+        submitted = st.form_submit_button("Register Student")
+        if submitted:
+            if full_name and reg_number and password:
+                try:
+                    hashed_pwd = hashlib.sha256(
+                        password.encode("utf-8")
+                    ).hexdigest()
+                    cursor.execute(
+                        "INSERT INTO user (full_name, phone, password_hash)"
+                        " VALUES (?, ?, ?)",
+                        (full_name, phone, hashed_pwd),
+                    )
+                    u_id = cursor.lastrowid
+                    cursor.execute(
+                        "INSERT INTO student (reg_number, user_id,"
+                        " year_of_study, national_id) VALUES (?, ?, ?, ?)",
+                        (reg_number, u_id, year_of_study, national_id),
+                    )
+                    conn.commit()
+                    st.success(
+                        f"✅ Student '{full_name}' Registered Successfully!"
+                    )
+                except sqlite3.IntegrityError:
+                    st.error(
+                        f"❌ Error: Reg Number '{reg_number}' already exists."
+                    )
+            else:
+                st.warning("Please fill in all required fields.")
 
-def manager_dashboard():
-    conn = sqlite3.connect("orange_hostels.db")
-    cursor = conn.cursor()
+# -------------------------------------------------------------
+# 3. MAKE ROOM RESERVATION
+# -------------------------------------------------------------
+elif menu == "🛌 Make Room Reservation":
+    st.header("Room Booking Portal")
 
-    cursor.execute("SELECT alert_id, reg_number, room_number, emergency_type, description FROM emergency WHERE status = 'Active (Unresolved)'")
+    reg_no = st.text_input("Enter Your Student Reg Number")
+
+    cursor.execute(
+        "SELECT room_id, room_number, price FROM room WHERE status ="
+        " 'Available'"
+    )
+    available_rooms = cursor.fetchall()
+
+    room_options = {
+        f"Room {r[1]} (UGX {r[2]:,.0f})": r[0] for r in available_rooms
+    }
+
+    if room_options:
+        selected_room_label = st.selectbox(
+            "Select Available Room", list(room_options.keys())
+        )
+        selected_room_id = room_options[selected_room_label]
+
+        if st.button("Confirm Reservation"):
+            cursor.execute(
+                "SELECT reg_number FROM student WHERE reg_number = ?", (reg_no,)
+            )
+            if cursor.fetchone():
+                booking_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute(
+                    "INSERT INTO booking (reg_number, room_id, booking_date,"
+                    " status) VALUES (?, ?, ?, 'Pending')",
+                    (reg_no, selected_room_id, booking_date),
+                )
+                conn.commit()
+                st.success(
+                    "✅ Booking Created Successfully! Status: Pending Payment."
+                )
+            else:
+                st.error(
+                    "❌ Error: Student Registration Number not found in the"
+                    " system."
+                )
+    else:
+        st.info("No rooms are currently available for booking.")
+
+# -------------------------------------------------------------
+# 4. PROCESS PAYMENT
+# -------------------------------------------------------------
+elif menu == "💳 Process Payment":
+    st.header("Booking Payment Verification")
+
+    booking_id = st.text_input("Enter Booking ID")
+    amount = st.number_input("Amount Paid (UGX)", min_value=0.0, step=10000.0)
+    txn_ref = st.text_input("Mobile Money / Bank Reference Code")
+    method = st.selectbox(
+        "Payment Method", ["MTN MoMo", "Airtel Money", "Bank Deposit"]
+    )
+
+    if st.button("Verify and Complete Payment"):
+        try:
+            cursor.execute(
+                "INSERT INTO payment (booking_id, amount, transaction_ref,"
+                " payment_method) VALUES (?, ?, ?, ?)",
+                (booking_id, amount, txn_ref, method),
+            )
+            cursor.execute(
+                "UPDATE booking SET status = 'Confirmed' WHERE booking_id = ?",
+                (booking_id,),
+            )
+
+            cursor.execute(
+                "SELECT room_id FROM booking WHERE booking_id = ?", (booking_id,)
+            )
+            res = cursor.fetchone()
+            if res:
+                cursor.execute(
+                    "UPDATE room SET status = 'Booked' WHERE room_id = ?",
+                    (res[0],),
+                )
+
+            conn.commit()
+            st.success(
+                f"✅ Payment Verified! Booking #{booking_id} is now CONFIRMED."
+            )
+        except sqlite3.IntegrityError:
+            st.error(
+                "❌ Error: Payment reference or Booking ID has already been"
+                " processed."
+            )
+
+# -------------------------------------------------------------
+# 5. EMERGENCY SOS DESK
+# -------------------------------------------------------------
+elif menu == "🚨 Emergency SOS Desk":
+    st.header("🚨 Emergency SOS Panic Desk")
+    st.warning(
+        "Use this interface strictly for urgent medical, security, or safety"
+        " alerts."
+    )
+
+    sos_reg = st.text_input("Student Registration Number")
+    sos_room = st.text_input("Current Room Number / Location")
+    sos_type = st.selectbox(
+        "Emergency Category", ["Medical", "Security Threat", "Fire Hazard"]
+    )
+    sos_desc = st.text_area("Brief Description of Emergency")
+
+    if st.button("Broadcast Emergency Alert"):
+        if sos_reg and sos_room and sos_desc:
+            created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute(
+                "INSERT INTO emergency (reg_number, room_number,"
+                " emergency_type, description, created_at) VALUES (?, ?, ?,"
+                " ?, ?)",
+                (sos_reg, sos_room, sos_type, sos_desc, created_at),
+            )
+            conn.commit()
+            st.error(
+                "🚨 EMERGENCY ALERT BROADCASTED! Hostel wardens and management"
+                " have been notified."
+            )
+        else:
+            st.error("Please fill in all fields before broadcasting.")
+
+# -------------------------------------------------------------
+# 6. MANAGER CONTROL DASHBOARD
+# -------------------------------------------------------------
+elif menu == "📊 Manager Control Dashboard":
+    st.header("Manager Control Panel")
+
+    # Display Active Emergencies
+    cursor.execute(
+        "SELECT alert_id, reg_number, room_number, emergency_type, description"
+        " FROM emergency WHERE status = 'Active (Unresolved)'"
+    )
     emergencies = cursor.fetchall()
+
     if emergencies:
-        print("\n🚨 --- CRITICAL EMERGENCY ALERTS ---")
+        st.error("🚨 CRITICAL ACTIVE EMERGENCIES")
         for e in emergencies:
-            print(f"ALERT #{e[0]} | Student: {e[1]} | Room: {e[2]} | Category: {e[3]} | Detail: {e[4]}")
-        print("-" * 65)
+            st.markdown(
+                f"""
+                * **Alert ID:** #{e[0]} | **Student:** {e[1]} | **Room:** {e[2]}
+                * **Type:** {e[3]}
+                * **Details:** {e[4]}
+                """
+            )
+    else:
+        st.success("No active emergency alerts at the moment.")
 
+    st.divider()
+
+    # Revenue Metrics
     cursor.execute("SELECT SUM(amount) FROM payment")
-    total_rev = cursor.fetchone()[0] or 0.0
+    total_revenue = cursor.fetchone()[0] or 0.0
+    st.metric(
+        label="Total Revenue Collected", value=f"UGX {total_revenue:,.0f}"
+    )
 
-    print("\n📊 --- MANAGER CONTROL DASHBOARD ---")
-    print(f"💰 Total Revenue Collected: UGX {total_rev:,.0f}")
-
-    print("\n📋 All System Bookings:")
+    st.subheader("All System Bookings")
     cursor.execute("""
         SELECT b.booking_id, u.full_name, r.room_number, b.status 
         FROM booking b
@@ -296,107 +281,11 @@ def manager_dashboard():
         JOIN user u ON s.user_id = u.user_id
         JOIN room r ON b.room_id = r.room_id
     """)
-    for b in cursor.fetchall():
-        print(f"  Booking #{b[0]} | Student: {b[1]} | Room: {b[2]} | Status: {b[3]}")
+    bookings = cursor.fetchall()
+    for b in bookings:
+        st.write(
+            f"Booking #{b[0]} | Student: {b[1]} | Room: {b[2]} | Status:"
+            f" {b[3]}"
+        )
 
-    conn.close()
-
-
-def show_terms():
-    print("\n📜 --- TERMS & CONDITIONS ---")
-    print("1. Booking status is 'Pending' until payment is verified.")
-    print("2. Rooms held under 'Pending' status expire after 24 hours.")
-    print("3. Quiet hours observed between 10:00 PM and 6:00 AM daily.")
-    print("4. Emergency SOS Panic Desk is strictly for medical/safety threats.")
-
-
-def show_architecture_diagrams():
-    print("\n📐 ==========================================")
-    print("SYSTEM ARCHITECTURE, UML & DATABASE MODELING")
-    print("==========================================")
-    
-    print("\n1. UML CLASS DIAGRAM (OBJECT-ORIENTED MODEL):")
-    print("""
-    +-------------------------------------------------------------------------+
-    |                                User                                     |
-    +-------------------------------------------------------------------------+
-    | - user_id: int | - full_name: string | - phone: string | - password_hash|
-    +-------------------------------------------------------------------------+
-                                        ▲
-                                        │ (Inheritance)
-                      ┌─────────────────┴─────────────────┐
-                      │                                   │
-    +-----------------------------------+ +-----------------------------------+
-    |              Student              | |              Manager              |
-    +-----------------------------------+ +-----------------------------------+
-    | - reg_number: string [PK]         | | - manager_id: string [PK]         |
-    | - year_of_study: int              | | - department: string            |
-    | - national_id: string             | +-----------------------------------+
-    +-----------------------------------+
-    """)
-
-    print("\n2. RELATIONAL DATABASE SCHEMA (ERD):")
-    print("  • USER      (user_id [PK], full_name, phone, password_hash)")
-    print("  • STUDENT   (reg_number [PK], user_id [FK], year_of_study, national_id)")
-    print("  • MANAGER   (manager_id [PK], user_id [FK], department)")
-    print("  • ROOM      (room_id [PK], room_number, capacity, price, status)")
-    print("  • BOOKING   (booking_id [PK], reg_number [FK], room_id [FK], booking_date, status)")
-    print("  • PAYMENT   (payment_id [PK], booking_id [FK, UNIQUE], amount, transaction_ref, payment_method)")
-    print("  • EMERGENCY (alert_id [PK], reg_number [FK], room_number, emergency_type, description, status)")
-
-    print("\n3. STATE TRANSITION MODEL:")
-    print("  [ Room Available ] ---> (Student Books) ---> [ Booking Pending ] ---> (Payment Verified) ---> [ Room Booked ]")
-    print("  [ Normal Operation ] ---> (SOS Triggered) ---> [ Active Alert ] ---> (Manager Resolves) ---> [ Resolved ]")
-
-
-# ==========================================
-# MAIN INTERACTIVE MENU
-# ==========================================
-def main_menu():
-    while True:
-        print("\n==========================================")
-        print("🍊 ORANGE HOSTELS MANAGEMENT SYSTEM")
-        print("==========================================")
-        print("1. Register Student Account")
-        print("2. Browse Rooms Inventory")
-        print("3. Make Room Reservation")
-        print("4. Pay for Booking")
-        print("5. 🚨 Emergency SOS Desk")
-        print("6. Manager Dashboard & Emergency Logs")
-        print("7. View Terms & Conditions")
-        print("8. 📐 System Architecture & UML Diagrams (For Lecturer)")
-        print("9. Exit")
-
-        choice = input("\nSelect Option (1-9): ").strip()
-
-        if choice == "1":
-            name = input("Full Name: ")
-            phone = input("Phone: ")
-            pwd = input("Password: ")
-            reg = input("Reg Number (e.g. 2026/OCT/001): ")
-            yr = int(input("Year of Study (1-4): "))
-            nid = input("National ID: ")
-            Student.register(name, phone, pwd, reg, yr, nid)
-        elif choice == "2":
-            view_rooms()
-        elif choice == "3":
-            book_room()
-        elif choice == "4":
-            process_payment()
-        elif choice == "5":
-            send_emergency_sos()
-        elif choice == "6":
-            manager_dashboard()
-        elif choice == "7":
-            show_terms()
-        elif choice == "8":
-            show_architecture_diagrams()
-        elif choice == "9":
-            print("\nGoodbye! Thank you for using Orange Hostels System. 🚀")
-            break
-        else:
-            print("Invalid option, try again.")
-
-
-if __name__ == "__main__":
-    main_menu()
+conn.close()
