@@ -154,76 +154,73 @@ elif menu == "🛌 Make Room Reservation":
   else:
     st.info("No rooms are currently available for booking.")
 # -------------------------------------------------------------
-# 4. PROCESS PAYMENT (FIXED DATABASE ERRORS)
+# 4. PROCESS PAYMENT (IMPROVED WITH DROPDOWN SELECTION)
 # -------------------------------------------------------------
 elif menu == "💳 Process Payment":
   st.header("Booking Payment Verification")
-  st.write("Enter your active Booking ID to complete payment matching.")
-
-  cursor.execute(
-      "SELECT booking_id, reg_number, room_id FROM booking WHERE status ="
-      " 'Pending'"
+  st.write(
+      "Select your pending booking from the list below to complete payment."
   )
+
+  # Fetch all pending bookings to let the user select easily
+  cursor.execute("""
+        SELECT b.booking_id, b.reg_number, r.room_number 
+        FROM booking b 
+        JOIN room r ON b.room_id = r.room_id 
+        WHERE b.status = 'Pending'
+    """)
   pending_bookings = cursor.fetchall()
+
   if pending_bookings:
-    st.info("💡 Pending bookings currently available for testing:")
-    for pb in pending_bookings:
-      st.write(f"- **Booking ID #{pb[0]}** (Student: {pb[1]})")
+    # Create a nice dictionary mapping for the dropdown
+    booking_options = {
+        f"Booking #{pb[0]} - Student: {pb[1]} (Room {pb[2]})": pb[0]
+        for pb in pending_bookings
+    }
 
-  booking_id = st.number_input("Enter Booking ID Number", min_value=1, step=1)
-  amount = st.number_input("Amount Paid (UGX)", min_value=0.0, step=10000.0)
-  txn_ref = st.text_input("Mobile Money / Bank Reference Code (e.g., TXN12345)")
-  method = st.selectbox(
-      "Payment Method", ["MTN MoMo", "Airtel Money", "Bank Deposit"]
-  )
-
-  if st.button("Verify and Complete Payment"):
-    cursor.execute(
-        "SELECT booking_id, status FROM booking WHERE booking_id = ?",
-        (booking_id,),
+    selected_booking_label = st.selectbox(
+        "Select Pending Booking ID", list(booking_options.keys())
     )
-    booking_record = cursor.fetchone()
+    booking_id = booking_options[selected_booking_label]
 
-    if booking_record:
-      if booking_record[1] == "Confirmed":
-        st.warning(
-            f"⚠️ Booking #{booking_id} has already been paid and confirmed!"
+    amount = st.number_input("Amount Paid (UGX)", min_value=0.0, step=10000.0)
+    txn_ref = st.text_input("Mobile Money / Bank Reference Code (e.g., TXN12345)")
+    method = st.selectbox(
+        "Payment Method", ["MTN MoMo", "Airtel Money", "Bank Deposit"]
+    )
+
+    if st.button("Verify and Complete Payment"):
+      try:
+        cursor.execute(
+            "INSERT INTO payment (booking_id, amount, transaction_ref,"
+            " payment_method) VALUES (?, ?, ?, ?)",
+            (booking_id, amount, txn_ref, method),
         )
-      else:
-        try:
+        cursor.execute(
+            "UPDATE booking SET status = 'Confirmed' WHERE booking_id = ?",
+            (booking_id,),
+        )
+        cursor.execute(
+            "SELECT room_id FROM booking WHERE booking_id = ?", (booking_id,)
+        )
+        res = cursor.fetchone()
+        if res:
           cursor.execute(
-              "INSERT INTO payment (booking_id, amount, transaction_ref,"
-              " payment_method) VALUES (?, ?, ?, ?)",
-              (booking_id, amount, txn_ref, method),
+              "UPDATE room SET status = 'Booked' WHERE room_id = ?", (res[0],)
           )
-          cursor.execute(
-              "UPDATE booking SET status = 'Confirmed' WHERE booking_id = ?",
-              (booking_id,),
+          conn.commit()
+          st.success(
+              f"✅ Payment Verified Successfully! Booking #{booking_id} is"
+              " now CONFIRMED."
           )
-          cursor.execute(
-              "SELECT room_id FROM booking WHERE booking_id = ?", (booking_id,)
-          )
-          res = cursor.fetchone()
-          if res:
-            cursor.execute(
-                "UPDATE room SET status = 'Booked' WHERE room_id = ?",
-                (res[0],),
-            )
-            conn.commit()
-            st.success(
-                f"✅ Payment Verified Successfully! Booking #{booking_id} is"
-                " now CONFIRMED."
-            )
-        except sqlite3.IntegrityError:
-          st.error(
-              "❌ Error: This transaction reference code has already been"
-              " used."
-          )
-    else:
-      st.error(
-          f"❌ Error: Booking ID #{booking_id} does not exist in the database."
-      )
-
+      except sqlite3.IntegrityError:
+        st.error(
+            "❌ Error: This transaction reference code has already been used."
+        )
+  else:
+    st.info(
+        "💡 No pending bookings found. Please make a room reservation first!"
+    )
 # -------------------------------------------------------------
 # 5. EMERGENCY SOS DESK
 # -------------------------------------------------------------
