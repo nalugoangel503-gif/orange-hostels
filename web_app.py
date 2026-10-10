@@ -1,3 +1,22 @@
+import streamlit as st
+
+# --- UI POLISH & CUSTOM STYLING ---
+st.set_page_config(
+    page_title="Orange Hostels System", page_icon="🍊", layout="wide"
+)
+
+# Custom header styling for Kampala University Luweero Campus project
+st.markdown(
+    """
+    <div style='background-color: #FF7518; padding: 15px; border-radius: 10px; text-align: center;'>
+        <h1 style='color: white; margin: 0;'>🍊 Orange Hostels Management System</h1>
+        <p style='color: white; margin: 5px 0 0 0; font-size: 16px;'>Kampala University Luweero Campus | Student Accommodation & Safety Portal</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("---")
 from datetime import datetime
 import hashlib
 import sqlite3
