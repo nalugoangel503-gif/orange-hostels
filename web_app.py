@@ -289,3 +289,17 @@ elif menu == "📊 Manager Control Dashboard":
         )
 
 conn.close()
+import streamlit as st
+
+# --- VISITOR LOG / FEEDBACK SECTION ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("📝 Visitor Log")
+visitor_name = st.sidebar.text_input("Enter your Name / Reg No:")
+if st.sidebar.button("Log Visit"):
+  if visitor_name:
+    st.sidebar.success(
+        f"Thank you, {visitor_name}! Your visit has been recorded."
+    )
+    # You can save this to a list or database table if you want
+  else:
+    st.sidebar.warning("Please enter a name first.")
